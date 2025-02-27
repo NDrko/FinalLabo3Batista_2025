@@ -1,118 +1,114 @@
 package ar.edu.utn.frbb.tup.model;
-
-
-
-
 import ar.edu.utn.frbb.tup.model.exception.AsignaturaInexistenteException;
 import ar.edu.utn.frbb.tup.model.exception.CorrelatividadException;
 import ar.edu.utn.frbb.tup.model.exception.EstadoIncorrectoException;
-
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class Alumno {
     private long id;
-
     private String nombre;
     private String apellido;
     private long dni;
+    private List<Asignatura> asignaturas = new ArrayList<>();
 
-    private List<Asignatura> asignaturas;
+    public Alumno() {}
 
-    public Alumno() {
-    }
     public Alumno(String nombre, String apellido, long dni) {
         this.nombre = nombre;
         this.apellido = apellido;
         this.dni = dni;
-
-        asignaturas = new ArrayList<>();
-
+        
     }
 
-    public void setNombre(String nombre) {
-        this.nombre = nombre;
+    // Getters y Setters
+    public long getId() {
+        return id;
     }
-
-    public void setApellido(String apellido) {
-        this.apellido = apellido;
+    public void setId(long id) {
+        this.id = id;
     }
-
-    public void setDni(long dni) {
-        this.dni = dni;
-    }
-
     public String getNombre() {
         return nombre;
     }
-
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
     public String getApellido() {
         return apellido;
     }
-
+    public void setApellido(String apellido) {
+        this.apellido = apellido;
+    }
     public long getDni() {
         return dni;
     }
-
-    public void agregarAsignatura(Asignatura a){
-        this.asignaturas.add(a);
+    public void setDni(long dni) {
+        this.dni = dni;
+    }
+    public List<Asignatura> getAsignaturas() {
+        return asignaturas;
+    }
+    public void setAsignaturas(List<Asignatura> asignaturas) {
+        this.asignaturas = asignaturas;
+    }
+   
+    public void agregarAsignatura(Asignatura asignatura) {
+        this.asignaturas.add(asignatura);
     }
 
-    public List<Asignatura> obtenerListaAsignaturas(){
-        return this.asignaturas;
+    public void actualizarAsignatura(Asignatura asignaturaActualizada) {
+        asignaturas.replaceAll(a -> 
+            a.getNombreAsignatura().equals(asignaturaActualizada.getNombreAsignatura()) ? 
+            asignaturaActualizada : a);
     }
 
-    public void aprobarAsignatura(Materia materia, int nota) throws EstadoIncorrectoException, CorrelatividadException, AsignaturaInexistenteException {
-        Asignatura asignaturaAAprobar = getAsignaturaAAprobar(materia);
-
-        for (Materia correlativa :
-                materia.getCorrelatividades()) {
-            chequearCorrelatividad(correlativa);
+    public void aprobarAsignatura(Materia materia, int nota)
+            throws EstadoIncorrectoException, CorrelatividadException, AsignaturaInexistenteException {
+        Asignatura asignaturaAAprobar = getAsignaturaPorMateria(materia);
+        
+        for (Materia correlativa : materia.getCorrelatividades()) {
+            if (!estaAprobada(correlativa)) {
+                throw new CorrelatividadException("La asignatura correlativa " + correlativa.getNombre() + " no está aprobada");
+            }
         }
         asignaturaAAprobar.aprobarAsignatura(nota);
     }
 
-    private void chequearCorrelatividad(Materia correlativa) throws CorrelatividadException {
-        for (Asignatura a:
-                asignaturas) {
-            if (correlativa.getNombre().equals(a.getNombreAsignatura())) {
-                if (!EstadoAsignatura.APROBADA.equals(a.getEstado())) {
-                    throw new CorrelatividadException("La asignatura " + a.getNombreAsignatura() + " no está aprobada");
-                }
-            }
-        }
+    private boolean estaAprobada(Materia materia) {
+        return asignaturas.stream()
+                .filter(a -> a.getNombreAsignatura().equals(materia.getNombre()))
+                .anyMatch(a -> a.getEstado() == EstadoAsignatura.APROBADA);
     }
 
-    private Asignatura getAsignaturaAAprobar(Materia materia) throws AsignaturaInexistenteException {
-
-        for (Asignatura a: asignaturas) {
-            if (materia.getNombre().equals(a.getNombreAsignatura())) {
-                return a;
-            }
-        }
-        throw new AsignaturaInexistenteException("No se encontró la materia");
+    private Asignatura getAsignaturaPorMateria(Materia materia) throws AsignaturaInexistenteException {
+        return asignaturas.stream()
+                .filter(a -> a.getNombreAsignatura().equals(materia.getNombre()))
+                .findFirst()
+                .orElseThrow(() -> new AsignaturaInexistenteException("No se encontró la asignatura para la materia: " + materia.getNombre()));
     }
 
-    public boolean puedeAprobar(Asignatura asignatura) {
-        return true;
+        @Override
+    public String toString() {
+        return String.format("Alumno{id=%d, nombre='%s', apellido='%s', dni=%d, asignaturas=%s}",
+        id, nombre, apellido, dni, asignaturas);
     }
 
-    public void actualizarAsignatura(Asignatura asignatura) {
-        for (Asignatura a:
-             asignaturas) {
-            if (a.getNombreAsignatura().equals(asignatura.getNombreAsignatura())) {
-                a.setEstado(asignatura.getEstado());
-                a.setNota(asignatura.getNota().get());
-            }
-        }
-
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Alumno alumno = (Alumno) obj;
+        return Long.compare(id, alumno.id) == 0 &&
+            Long.compare(dni, alumno.dni) == 0 &&
+            Objects.equals(nombre, alumno.nombre) &&
+            Objects.equals(apellido, alumno.apellido);
     }
 
-    public long getId() {
-        return id;
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, nombre, apellido, dni);
     }
 
-    public void setId(long id) {
-        this.id = id;
-    }
 }
