@@ -1,88 +1,182 @@
 package ar.edu.utn.frbb.tup.controller;
-
-import ar.edu.utn.frbb.tup.App;
 import ar.edu.utn.frbb.tup.business.MateriaService;
 import ar.edu.utn.frbb.tup.model.Materia;
 import ar.edu.utn.frbb.tup.model.dto.MateriaDto;
+import ar.edu.utn.frbb.tup.persistence.exception.MateriaBadRequestException;
+import ar.edu.utn.frbb.tup.persistence.exception.MateriaNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.Mockito;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.context.WebApplicationContext;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-@ExtendWith(SpringExtension.class)
+@WebMvcTest(MateriaController.class)
 public class MateriaControllerTest {
 
-    @InjectMocks
-    MateriaController materiaController;
+    @Autowired
+    private MockMvc mockMvc;
 
-    @Mock
-    MateriaService materiaService;
+    @MockBean
+    private MateriaService materiaService;
 
-    MockMvc mockMvc;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-    private static ObjectMapper mapper = new ObjectMapper();
+    // Obtener todas las materias
+    @Test
+    public void testGetMaterias_Success() throws Exception {
+        Materia materia1 = new Materia("Matematica", 2023, 1, null);
+        materia1.setId(1);
+        Materia materia2 = new Materia("Fisica", 2023, 1, null);
+        materia2.setId(2);
 
-    @BeforeEach
-    public void setUp() {
-        this.mockMvc = MockMvcBuilders.standaloneSetup(materiaController).build();
+        Mockito.when(materiaService.getAllMaterias()).thenReturn(Arrays.asList(materia1, materia2));
+
+        mockMvc.perform(get("/materias"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[1].id").value(2));
     }
 
+    // Obtener materias ordenadas
     @Test
-    public void crearMateriaTest() throws Exception {
+    public void testGetMateriasOrdenadas_Success() throws Exception {
+        Materia materia1 = new Materia("Fisica", 2023, 1, null);
+        materia1.setId(2);
+        Materia materia2 = new Materia("Matematica", 2023, 1, null);
+        materia2.setId(1);
 
-        Mockito.when(materiaService.crearMateria(any(MateriaDto.class))).thenReturn(new Materia());
+        Mockito.when(materiaService.ordenarMaterias("nombre"))
+                .thenReturn(Arrays.asList(materia1, materia2));
+
+        mockMvc.perform(get("/materias/ordenadas").param("ordenamiento", "nombre"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(2))
+                .andExpect(jsonPath("$[1].id").value(1));
+    }
+
+    // Filtrar materia por nombre
+    @Test
+    public void testFiltrarPorNombre_Success() throws Exception {
+        Materia materia = new Materia("Quimica", 2023, 1, null);
+        materia.setId(3);
+
+        Mockito.when(materiaService.filtrarPorNombre("Quimica")).thenReturn(materia);
+
+        mockMvc.perform(get("/materias/filtro").param("nombre", "Quimica"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(3))
+                .andExpect(jsonPath("$.nombre").value("Quimica"));
+    }
+
+    // Obtener materia por ID
+    @Test
+    public void testGetMateriaById_Success() throws Exception {
+        Materia materia = new Materia("Historia", 2023, 1, null);
+        materia.setId(4);
+
+        Mockito.when(materiaService.getMateriaPorId(4)).thenReturn(materia);
+
+        mockMvc.perform(get("/materias/4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(4))
+                .andExpect(jsonPath("$.nombre").value("Historia"));
+    }
+
+    // Caso de error: Obtener materia inexistente
+    @Test
+    public void testGetMateriaById_NotFound() throws Exception {
+        Mockito.when(materiaService.getMateriaPorId(99))
+                .thenThrow(new MateriaNotFoundException("Materia no encontrada"));
+
+        mockMvc.perform(get("/materias/99"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorMessage").value("Materia no encontrada"));
+    }
+
+    //  Crear materia
+    @Test
+    public void testCrearMateria_Success() throws Exception {
         MateriaDto materiaDto = new MateriaDto();
-        materiaDto.setAnio(1);
-        materiaDto.setCuatrimestre(2);
-        materiaDto.setNombre("Laboratorio II");
-        materiaDto.setProfesorId(345);
-        MvcResult result = mockMvc.perform(MockMvcRequestBuilders.post("/materia")
+        materiaDto.setNombre("Geografia");
+        materiaDto.setAnio(2023);
+        materiaDto.setCuatrimestre(1);
+        materiaDto.setProfesorId(1L);
+        materiaDto.setCarreraId(null);
+
+        Materia materia = new Materia("Geografia", 2023, 1, null);
+        materia.setId(5);
+
+        Mockito.when(materiaService.crearMateria(any(MateriaDto.class))).thenReturn(materia);
+
+        mockMvc.perform(post("/materias")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(mapper.writeValueAsString(materiaDto))
-                .accept(MediaType.APPLICATION_JSON)).andExpect(status().is2xxSuccessful())
-                .andReturn();
-
-
-
-        Assertions.assertEquals(new Materia(), mapper.readValue(result.getResponse().getContentAsString(), Materia.class));
+                .content(objectMapper.writeValueAsString(materiaDto)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(5))
+                .andExpect(jsonPath("$.nombre").value("Geografia"));
     }
 
+    // Caso de error: Crear materia con datos inválidos
     @Test
-    public void testCrearMateriaBadRequest() throws Exception {
+    public void testCrearMateria_Failure_InvalidData() throws Exception {
+        MateriaDto materiaDto = new MateriaDto();
+        materiaDto.setNombre("");
+        materiaDto.setAnio(0);
+        materiaDto.setCuatrimestre(0);
 
-        Mockito.when(materiaService.crearMateria(any(MateriaDto.class))).thenReturn(new Materia());
-        MvcResult result = mockMvc.perform(MockMvcRequestBuilders.post("/materia")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\n" +
-                                "    \"nombre\" : \"Laboratorio II\",\n" +
-                                "    \"anio\" : \"segundo\", \n" +
-                                "    \"cuatrimestre\" : 1,\n" +
-                                "    \"profesorId\" : 2 \n"+
-                                "}")
-                        .accept(MediaType.APPLICATION_JSON)).andExpect(status().isBadRequest())
-                .andReturn();
+        Mockito.when(materiaService.crearMateria(any(MateriaDto.class)))
+                .thenThrow(new MateriaBadRequestException("Datos inválidos"));
 
+        mockMvc.perform(post("/materias")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(materiaDto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorMessage").value("Datos inválidos"));
     }
 
+    //  Borrar materia
+    @Test
+    public void testBorrarMateria_Success() throws Exception {
+        Materia materia = new Materia("Economia", 2023, 1, null);
+        materia.setId(6);
 
+        Mockito.when(materiaService.borrarMateria(6)).thenReturn(materia);
+
+        mockMvc.perform(delete("/materias/6"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(6));
+    }
+
+    //  Modificar materia
+    @Test
+    public void testModificarMateria_Success() throws Exception {
+        Map<String, Object> nuevosDatos = new HashMap<>();
+        nuevosDatos.put("nombre", "Biologia");
+
+        Materia materia = new Materia("Biologia", 2023, 1, null);
+        materia.setId(7);
+
+        Mockito.when(materiaService.modificarMateria(eq(nuevosDatos), eq(7))).thenReturn(materia);
+
+        mockMvc.perform(patch("/materias/7")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(nuevosDatos)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre").value("Biologia"));
+    }
 }
